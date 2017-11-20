@@ -198,6 +198,43 @@ class GANLoss(nn.Module):
         return self.loss(input, target_tensor)
 
 
+class STN(nn.Module):
+    def __init__(self, in_channels, in_H, in_W):
+        super(STN, self).__init__()
+        self.localization = nn.Sequential(
+            nn.Conv2d(in_channels, 8, stride=2, kernel_size=7),
+            nn.ReLU(True),
+            nn.Conv2d(8, 10, stride=2, kernel_size=5),
+            nn.ReLU(True)
+        )
+        H1 = int((in_H - (7 - 1) - 1) / 2. + 1)
+        H2 = int((H1 - (5-1) - 1) / 2. + 1)
+        W1 = int((in_W - (7 - 1) - 1) / 2. + 1)
+        W2 = int((W1 - (5-1) - 1) / 2. + 1)
+        self.linear_in_features = 10 * H2 * W2
+        self.in_channels = in_channels
+        self.in_H, self.in_W = in_H, in_W
+        self.fc_loc = nn.Sequential(
+            nn.Linear(self.linear_in_features, 32),
+            nn.ReLU(True),
+            nn.Linear(32, 3 * 2)
+        )
+        # Initialize the weights/bias with identity transformation
+        self.fc_loc[2].weight.data.fill_(0)
+        self.fc_loc[2].bias.data = torch.FloatTensor([1, 0, 0, 0, 1, 0])
+
+
+    def forward(self, x):
+        xs = self.localization(x)
+        print(xs.size())
+        xs = xs.view(-1, self.linear_in_features)
+        theta = self.fc_loc(xs)
+        theta = theta.view(-1, 2, 3)
+
+        grid = nn.functional.affine_grid(theta, x.size())
+        return nn.functional.grid_sample(x, grid)
+
+
 # Defines the generator that consists of Resnet blocks between a few
 # downsampling/upsampling operations.
 # Code and idea originally from Justin Johnson's architecture.
