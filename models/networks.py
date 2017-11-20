@@ -207,6 +207,7 @@ class STN(nn.Module):
             nn.Conv2d(8, 10, stride=2, kernel_size=5),
             nn.ReLU(True)
         )
+
         H1 = int((in_H - (7 - 1) - 1) / 2. + 1)
         H2 = int((H1 - (5-1) - 1) / 2. + 1)
         W1 = int((in_W - (7 - 1) - 1) / 2. + 1)
@@ -235,6 +236,27 @@ class STN(nn.Module):
         return nn.functional.grid_sample(x, grid)
 
 
+class NBranchSTN(nn.Module):
+    def __init__(self, in_channels, in_H, in_W,
+                 ngf, use_bias, num_stns):
+        super(NBranchSTN, self).__init__()
+        self.branches = [
+            nn.Sequential(
+                STN(in_channels, in_H, in_W),
+                nn.Conv2d(in_channels, ngf / 2, kernel_size=7, padding=0, bias=use_bias)
+            ) for _ in range(num_stns)
+        ]
+        self.branches.append(nn.Sequential(
+            nn.Conv2d(in_channels, ngf, kernel_size=7, padding=0, bias=use_bias)
+        ))
+        for i, branch in enumerate(self.branches):
+            self.add_module(str(i), branch)
+
+
+    def __forward__(self, x):
+        return torch.cat([b(x) for b in self.branches], 1)
+
+
 # Defines the generator that consists of Resnet blocks between a few
 # downsampling/upsampling operations.
 # Code and idea originally from Justin Johnson's architecture.
@@ -252,16 +274,18 @@ class ResnetGenerator(nn.Module):
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
 
+        num_stns = 3
+        adj_ngf = (num_stns * ngf / 2) + ngf
         model = [nn.ReflectionPad2d(3),
-                 nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0,
-                           bias=use_bias),
-                 norm_layer(ngf),
+                 NBranchSTN(input_nc, 256, 256, ngf, use_bias, num_stns),
+                 norm_layer(adj_ngf),
                  nn.ReLU(True)]
 
         n_downsampling = 2
         for i in range(n_downsampling):
             mult = 2**i
-            model += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3,
+            adj_or_not_ngf = ngf if i else adj_ngf
+            model += [nn.Conv2d(adj_or_not_ngf * mult, ngf * mult * 2, kernel_size=3,
                                 stride=2, padding=1, bias=use_bias),
                       norm_layer(ngf * mult * 2),
                       nn.ReLU(True)]
