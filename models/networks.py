@@ -253,7 +253,7 @@ class NBranchSTN(nn.Module):
             self.add_module(str(i), branch)
 
 
-    def __forward__(self, x):
+    def forward(self, x):
         return torch.cat([b(x) for b in self.branches], 1)
 
 
