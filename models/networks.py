@@ -243,7 +243,7 @@ class NBranchSTN(nn.Module):
         self.branches = [
             nn.Sequential(
                 STN(in_channels, in_H, in_W),
-                nn.Conv2d(in_channels, ngf / 2, kernel_size=7, padding=0, bias=use_bias)
+                nn.Conv2d(in_channels, int(ngf/2), kernel_size=7, padding=0, bias=use_bias)
             ) for _ in range(num_stns)
         ]
         self.branches.append(nn.Sequential(
@@ -275,7 +275,7 @@ class ResnetGenerator(nn.Module):
             use_bias = norm_layer == nn.InstanceNorm2d
 
         num_stns = 3
-        adj_ngf = (num_stns * ngf / 2) + ngf
+        adj_ngf = int((num_stns * ngf / 2) + ngf)
         model = [nn.ReflectionPad2d(3),
                  NBranchSTN(input_nc, 256, 256, ngf, use_bias, num_stns),
                  norm_layer(adj_ngf),
