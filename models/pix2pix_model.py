@@ -100,20 +100,23 @@ class Pix2PixModel(BaseModel):
 
         self.loss_D.backward()
 
-    def backward_G(self):
+    def backward_G(self, epoch):
         # First, G(A) should fake the discriminator
         fake_AB = torch.cat((self.real_A, self.fake_B), 1)
         pred_fake = self.netD(fake_AB)
         self.loss_G_GAN = self.criterionGAN(pred_fake, True)
 
         # Second, G(A) = B
-        self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * self.opt.lambda_A
+        lambda_A = self.opt.lambda_A
+        if epoch > 20:
+            lambda_A  = max(lambda_A - self.opt.lambda_A * ((epoch - 20.) / 30.), 0)
+        self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * lambda_A
 
         self.loss_G = self.loss_G_GAN + self.loss_G_L1
 
         self.loss_G.backward()
 
-    def optimize_parameters(self):
+    def optimize_parameters(self, epoch):
         self.forward()
 
         self.optimizer_D.zero_grad()
@@ -121,7 +124,7 @@ class Pix2PixModel(BaseModel):
         self.optimizer_D.step()
 
         self.optimizer_G.zero_grad()
-        self.backward_G()
+        self.backward_G(epoch)
         self.optimizer_G.step()
 
     def get_current_errors(self):
