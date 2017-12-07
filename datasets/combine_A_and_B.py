@@ -10,10 +10,28 @@ parser.add_argument('--fold_B', dest='fold_B', help='input directory for image B
 parser.add_argument('--fold_AB', dest='fold_AB', help='output directory', type=str, default='../dataset/test_AB')
 parser.add_argument('--num_imgs', dest='num_imgs', help='number of images',type=int, default=1000000)
 parser.add_argument('--use_AB', dest='use_AB', help='if true: (0001_A, 0001_B) to (0001_AB)',action='store_true')
+parser.add_argument('--angles_path', type=str)
 args = parser.parse_args()
 
 for arg in vars(args):
     print('[%s] = ' % arg,  getattr(args, arg))
+
+if args.angles_path:
+    with open(args.angles_path, 'r') as f:
+        lines = f.readlines()
+        num_projs = 8 # per pano
+        num_panos = len(lines) / num_projs
+        phis, thetas = np.zeros((num_panos, num_projs)), np.zeros((num_panos, num_projs))
+        for line in lines:
+            pano_num, proj_num, phi, theta = line.rstrip('\n').split(' ')
+            pano_num, proj_num = int(pano_num), int(proj_num)
+            phi, theta = float(phi), float(theta)
+            phis[pano_num,proj_num] = phi
+            thetas[pano_num,proj_num] = theta
+        phis /= np.pi
+        thetas /= 2 * np.pi
+        phis = (255 * phis).astype('uint8')
+        thetas = (255 * thetas).astype('uint8')
 
 splits = os.listdir(args.fold_A)
 
@@ -44,6 +62,12 @@ for sp in splits:
                 name_AB = name_AB.replace('_A.', '.') # remove _A
             path_AB = os.path.join(img_fold_AB, name_AB)
             im_A = cv2.imread(path_A, cv2.IMREAD_COLOR)
+            if args.angles_path:
+                base, ext = os.path.splitext(name_A)
+                pano_num, proj_num = base[2:].split('_')
+                pano_num, proj_num = int(pano_num), int(proj_num)
+                im_A[...,1] = phis[pano_num,proj_num]
+                im_A[...,2] = thetas[pano_num,proj_num]
             im_B = cv2.imread(path_B, cv2.IMREAD_COLOR)
             im_AB = np.concatenate([im_A, im_B], 1)
             cv2.imwrite(path_AB, im_AB)
